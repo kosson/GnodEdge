@@ -1,12 +1,12 @@
 {
   "dependencies": {
-    "csv-parse": "^5.3.10"
+    "csv-parse": "^5.3.10",
+    "sqlite3": "^5.1.6"
   },
   "name": "gnodedge",
   "description": "Creator of nodes and edges for Gephi",
   "version": "0.0.1",
   "main": "index.js",
-  "devDependencies": {},
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

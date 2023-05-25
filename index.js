@@ -1,6 +1,9 @@
 import fs from 'node:fs/promises';
 import { parse } from 'csv-parse';
 
+import {connectToDatabase} from './db.js';
+connectToDatabase();
+
 (async function GnodeEdge () {
 
     // read the file source
@@ -8,7 +11,7 @@ import { parse } from 'csv-parse';
     fd.createReadStream()
         .pipe(parse({ delimiter: ",", from_line: 2 }))
         .on("data", function (row) {
-            console.log(row);
+            // console.log(row);
         })
         .on("end", function () {
             console.log("finished");
