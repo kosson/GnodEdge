@@ -1,0 +1,1 @@
+Use Obsidian (https://obsidian.md/) to open this folder.
