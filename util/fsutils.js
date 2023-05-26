@@ -1,13 +1,14 @@
-import fs from 'node:fs/promises';
+import { access, constants } from 'node:fs/promises';
 
 // https://stackoverflow.com/questions/50767829/why-node-js-fs-existssync-doesnt-work-well-when-wrapped-in-promise
-function accessPromise(dir) {
-    return new Promise((resolve, reject) => {
-        fs.access(dir, (err) => {
-            if (err) reject();
-            else resolve(true);
-        });
-    });
+async function accessPromise (path) {
+    try {
+        if (await access(path, constants.R_OK | constants.W_OK)) {
+            return true;
+        };
+    } catch (error) {
+        console.error(error);
+    }
 }
 
 export {accessPromise};
