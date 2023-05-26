@@ -9,22 +9,8 @@ import {accessPromise} from './util/fsutils.js';
 import fileDirName from './util/fileDirName.js';
 const { __dirname, __filename } = fileDirName(import.meta);
 
-const filepath = path.join(__dirname, 'publications.db');
+const filepath = path.join(__dirname, 'publications.sqlite');
 // console.log(`The path of the database file should be ${filepath}`);
-
-function createTable (db) {
-  db.exec(`
-  CREATE TABLE articles
-  (
-    zotkey           VARCHAR(10),
-    year             INT,
-    author           VARCHAR(50),
-    title            VARCHAR(20),
-    journalAccr      VARCHAR(10),
-    kw               VARCHAR(50)
-  )
-`);
-};
 
 async function connectToDatabase() {
     try {
@@ -36,10 +22,7 @@ async function connectToDatabase() {
               if (error) {
                 return console.error(error.message);
               }
-              console.log("Connection established");
-
-              // create the table of articles
-              createTable(db);
+              // console.log("Connection established");
             });
             return db;
           }
