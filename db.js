@@ -9,23 +9,27 @@ import {accessPromise} from './util/fsutils.js';
 import fileDirName from './util/fileDirName.js';
 const { __dirname, __filename } = fileDirName(import.meta);
 
-const filepath = path.join(__dirname, 'publications.sqlite');
-// console.log(`The path of the database file should be ${filepath}`);
-
-async function connectToDatabase() {
+/**
+ * The function creates connection to the database file
+ *
+ * @returns {Object} db
+ */
+async function connectToDatabase(dbFileName) {
     try {
-        // FIXME: TypeError [ERR_INVALID_ARG_TYPE]: The "mode" argument must be of type number. Received type function ([Function (anonymous)])
-        if (await accessPromise(filepath)) {
-            return new sqlite3.Database(filepath);
-          } else {
-            const db = new sqlite3.Database(filepath, (error) => {
-              if (error) {
-                return console.error(error.message);
-              }
-              // console.log("Connection established");
-            });
-            return db;
+      const filepath = path.join(__dirname, dbFileName);
+      // console.log(`The path of the database file should be ${filepath}`);
+      
+      if (await accessPromise(filepath)) {
+          return new sqlite3.Database(filepath);
+      } else {
+        const db = new sqlite3.Database(filepath, sqlite3.OPEN_READWRITE, function clbkCreateDb (error) {
+          if (error) {
+            throw new Error (`At the time I tried to create db this error was thrown: ${error}`);
           }
+          // console.log("Connection established");
+        });
+        return db;
+      }
     } catch (error) {
         console.log(error);
     }
