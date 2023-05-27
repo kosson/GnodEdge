@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import { parse } from 'csv-parse';
-import sqlite3 from 'sqlite3';
 import inquirer from 'inquirer';
 
 import {connectToDatabase} from './db.js';
@@ -14,8 +13,8 @@ async function populateTable () {
       .on("data", function clbkWorkOnRow(row) {
         // console.log(`Valorile rândului sunt ${row[0]}, apoi ${row[1]}`);
 
-        let prepStmt = db.prepare(`INSERT INTO articles(zotkey, year, author, title, journalAccr, kw) VALUES (?, ?, ?, ?, ?, ?)`);
-        prepStmt.run([row[0], row[1], row[2], row[3], row[4], row[5]], function clbkerrorinsert(error) {
+        let prepStmt = db.prepare(`INSERT INTO articles(Id,Label,Year,Author,JournalAccr,Kw) VALUES (?, ?, ?, ?, ?, ?)`);
+        prepStmt.run([row[0],row[3],row[1],row[2],row[4],row[5]], function clbkerrorinsert(error) {
           if (error) {
             throw new Error(`At inserting the data, this error appeared: ${error.message}`);
           } else {
@@ -38,14 +37,16 @@ async function populateTable () {
 }
 
 try {
-  // the query needed to establish the existance of the table `articles`
-  let tableExistsQuery = `SELECT EXISTS (SELECT name FROM sqlite_master WHERE type='table' AND name='articles')`;
+  // the query needed to create `articles` table
+  let tableExistsQuery = `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='articles'`;
 
-  db.get(tableExistsQuery, async function clbkTableExists (error, row) {
+  // investigate if the table exists. If it exists, ask user if she/he wants to wipe clean the data.
+  // if it doesn't exists, create the table
+  db.get(tableExistsQuery, async function clbkTableExists (error, count) {
     if (error) {
-      throw new Error(`I investigated and error appeared is ${error}`);
+      throw new Error(`I've looked for the table, but this error appeared ${error}`);
     }
-    if (row !== undefined) {
+    if (count === 1) {
       console.log(`Table already exists, silly ol' chap!`);
 
       // put an option to cleaning the existing data (https://betterprogramming.pub/how-to-create-beautiful-command-line-interactions-with-node-js-2fcdfbbac62c)
@@ -83,12 +84,12 @@ try {
       db.exec(`
         CREATE TABLE articles
         (
-          zotkey           VARCHAR(10),
-          year             INT,
-          author           VARCHAR(50),
-          title            VARCHAR(20),
-          journalAccr      VARCHAR(10),
-          kw               VARCHAR(50)
+          Id           VARCHAR(10),
+          Label        VARCHAR(50),
+          Year         INT,
+          Author       VARCHAR(20),
+          JournalAccr  VARCHAR(10),
+          Kw           VARCHAR(50)
         )
       `);
       await populateTable();

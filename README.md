@@ -4,6 +4,8 @@
 
 Creator of nodes and edges for Gephi
 
+Purpose: the app is built out of the need to shape bibliographic data in such a way to be fast compatible with Gephi application. The purpose is to create the nodes table and the edges table very fast out of data saved from Zotero and cleaned a bit afterwards. For a good measure, take a look at the data-prima-forma.csv file to understand the reduced shape of the data.
+
 Requirements:
 
 - Install Obsidian from Obsidian.md. Create a new vault having the subdirectory gnodedgeplan as target. Opening Obsidian, you get a visualization with the planned steps in application development;
@@ -12,20 +14,4 @@ Requirements:
 
 Important note: This is work in progress. The first stable app will be marked by the first release.
 
-Mind that the structure of the `articles` table is as following:
-
-```javascript
-db.exec(`
-CREATE TABLE articles
-    (
-        zotkey           VARCHAR(10),
-        year             INT,
-        author           VARCHAR(50),
-        title            VARCHAR(20),
-        journalAccr      VARCHAR(10),
-        kw               VARCHAR(50)
-    )
-`);
-```
-
-Observe that it follows the CSV variant you feed the app. The property `zotkey` is the key I obtained at the export of the data from Zotero.
+Details for using the app, in this section of the documentation: [loadingdata](DOCS/lodingdata.md).
