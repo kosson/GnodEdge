@@ -38,7 +38,6 @@ CREATE TABLE articles
 )
 `;
 
-
 /* === Descriptors table === */
 let descriptorsExistsQuery = `SELECT count(*) as result FROM sqlite_master WHERE type='table' AND name='descriptors'`;
 let descriptorsTabelHeadStructure = `hash,descriptor,Years,JournalAccrs`;
@@ -250,19 +249,21 @@ try {
   function addOneValueToAJSONarr (tableName, columName, keyName, value, hash) {
     let query = `
       UPDATE ${tableName}
-      SET ${columName} = json_set(${columName}, '$.${keyName}', json_array('?'))
+      SET ${columName} = json_set(${columName}, '$.${keyName}', ?)
       WHERE hash = ?;
     `;
     db.run(query, [value, hash], function clbkUpdateOneArr (error) {
       if (error) {
         throw new Error (`At the moment of updating the value, the following error popped up: ${error.message}`);
       }
+      console.log(`${this.changes} enrichment for descriptor: ${hash}`);
     });
   }
 
   let clearing = new Set();
   /**
    * Function pushes descriptors in `descriptors` table
+   * There are 20253 descriptors even when they double (10877 unique descriptors)
    */
   async function addUniqueDescriptorToTable (descriptor, row) {
     // console.log(`The descriptor is ${descriptor} and is in the clearing ${clearing.has(descriptor)}`);
@@ -322,88 +323,97 @@ try {
    * Function will enrich all the records in the descriptors table
    * @param {Object} row 
    */
-  function enrichDescriptorNodes (row) {
-    // check if the descriptor exists in Set:Clearing
+  function enrichDescriptorNodes (row) {  
+      let KwObj = JSON.parse(row['Kw']); // parse the object value in in Kw
+      let kwArr = KwObj['values'];       // set `kwArr` -> should be an array
+      // console.log(`The descriptor array for this row is ${kwArr}`);
 
-    for (let descriptor of clearing) {
-
-      console.log(`Processed descriptor ${descriptor}`);
-      
-      db.get(`SELECT * FROM descriptors WHERE descriptor="${descriptor}"`, function clbkChec4ExistanceOfDescr (error, result) {
-        if (error) {
-          throw new Error (`Searching for the same descriptor, I came upon this error: ${error.message}`, error);
-        }
-        // There are 20253 descriptors even when they double (10877 unique descriptors)
-        // console.log(`The result from quiring for ${descriptor} is ${JSON.stringify(result)}`);
-        if (!test4empty(result)) {
-          // Extract the year and compare with the values already existing
-          let resultExistingYears = JSON.parse(result['Years']);
-          resultExistingYears.push(row['Year']); // update the years to include the new year as well
-          let resultExistingJournalAccrs = JSON.parse(result['JournalAccrs']);
-          resultExistingJournalAccrs.push(row['JournalAccr']); // update de Accrs to include the new journal accr as well
-        
-          let newEdge = [];
-          newEdge[0] = result['hash']; // [Source:string]
-          newEdge[1] = row['Id']; // [Target:string] this value is the id for the name of the article
-          newEdge[2] = 1; // [Weight:integer]
-          newEdge[3] = "Directed"; // [Type:string]
-          newEdge[4] = "descriptor"; // [Kind:string]
-          newEdge[5] = row['Label']; // [ArticleTitle:string]
-          newEdge[6] = row['Year']; // [Year:integer]
-          newEdge[7] = row['JournalAccr']; // [JournalAccr:string]
-        
-          // The case when the year and the JournalAccr are missing from their coresponding arrays of the descriptor
-          if (!resultExistingYears.includes(row['Year'] && !resultExistingJournalAccrs.includes(row[JournalAccr]))) {
-        
-            // if the `Year` value in the row (of the `descriptors` table) doesn't exist
-            let queryStringForAmmendYearsArray = `
-              UPDATE descriptors 
-              SET 
-                Years = json_set(Years, '$.values', json_array(?), 
-                JournalAccrs = json_set(JournalAccrs, '$.values', json_array(?))
-              WHERE hash = ?
-            `;
-        
-            db.run(queryStringForAmmendYearsArray, [JSON.stringify(resultExistingYears), JSON.stringify(resultExistingJournalAccrs), result['hash']], function clbkUpdateTwoVals (error) {
-              if (error) {
-                throw new Error (`By the moment I tried to update the two values, this error appeared ${error.message}`);
-              }
-              
-              // Log the success message
-              console.log(`Descriptors which were updated: ${this.changes}`);
-            });
+      for (let descriptor of kwArr) {
+        db.get(`SELECT * FROM descriptors WHERE descriptor="${descriptor}"`, async function clbkChec4ExistanceOfDescr (error, result) {
+          if (error) {
+            throw new Error (`Searching for the same descriptor, I came upon this error: ${error.message}`, error);
           }
           
-          // FIXME: When descriptors behave, activate
-        
-          // else if (!resultExistingYears.includes(row['Year'])) {
-          //   // treat the case when only the value or the `Year` is different
-          //   addOneValueToAJSONarr('descriptors', 'Years', 'values', JSON.stringify(resultExistingYears));
-          //   if (newEdge.length === 8) {
-          //     await createAnEdge(newEdge);
-          //   }
-          // } else if (!resultExistingJournalAccrs.includes(row['JournalAccr'])) {
-          //   // treat the case when the accronim of the venue doesn't exist
-          //   addOneValueToAJSONarr('descriptors', 'JournalAccrs', 'values', JSON.stringify(resultExistingJournalAccrs));
-          //   if (newEdge.length === 8) {
-          //     await createAnEdge(newEdge);
-          //   }
-          // }
-        
-        
-          // #1 Search the record
-          /*          
-          SELECT *
-          FROM articles
-          WHERE id IN (
-            SELECT Id
+          // console.log(`The result from quiring for ${descriptor} is ${JSON.stringify(result)}`);
+          if (!test4empty(result)) {
+            // console.log(`Row is in the formof ${JSON.stringify(row)}`);
+            // Extract the year and compare with the values already existing
+            let yearsParsed = JSON.parse(result['Years']);
+            let resultExistingYears = yearsParsed['values'];
+            if (row['Year'] !== undefined && !resultExistingYears.includes(row['Year'])) {
+              resultExistingYears.push(row['Year']);
+            }; // update the years to include the new year as well
+            let JournalAccrs = JSON.parse(result['JournalAccrs']);
+            let resultExistingJournalAccrs = JournalAccrs['values'];
+            if (row['JournalAccr'] !== undefined && !resultExistingJournalAccrs.includes(row['JournalAccr'])) {
+              resultExistingJournalAccrs.push(row['JournalAccr'])
+            }; // update de Accrs to include the new journal accr as well
+          
+            // prepare the new edge
+            let newEdge = [];
+            newEdge[0] = result['hash']; // [Source:string]
+            newEdge[1] = row['Id']; // [Target:string] this value is the id for the name of the article
+            newEdge[2] = 1; // [Weight:integer]
+            newEdge[3] = "Directed"; // [Type:string]
+            newEdge[4] = "descriptor"; // [Kind:string]
+            newEdge[5] = row['Label']; // [ArticleTitle:string]
+            newEdge[6] = row['Year']; // [Year:integer]
+            newEdge[7] = row['JournalAccr']; // [JournalAccr:string]
+          
+            // The case when the year and the JournalAccr are missing from their coresponding arrays of the descriptor
+            if (!resultExistingYears.includes(row['Year'] && !resultExistingJournalAccrs.includes(row['JournalAccr']))) {
+          
+              // if the `Year` value in the row (of the `descriptors` table) doesn't exist
+              let queryStringForAmmendYearsArray = `
+                UPDATE descriptors 
+                SET 
+                  Years = json_set(Years, '$.values', ?), 
+                  JournalAccrs = json_set(JournalAccrs, '$.values', ?)
+                WHERE hash = ?
+              `;
+          
+              db.run(queryStringForAmmendYearsArray, [JSON.stringify({values: resultExistingYears}), JSON.stringify({values: resultExistingJournalAccrs}), result['hash']], async function clbkUpdateTwoVals (error) {
+                if (error) {
+                  throw new Error (`By the moment I tried to update the two values, this error appeared ${error.message}`);
+                }
+                // create a new edge for this case when the descriptor shows up at another year, another journal/conference (venue)
+                if (newEdge.length === 8) {
+                  await createAnEdge(newEdge);
+                }
+                // Log the success message
+                console.log(`${this.changes} enrichment for descriptor: ${result['descriptor']}`);
+              });
+            } else if (!resultExistingYears.includes(row['Year'])) {
+              // treat the case when only the value or the `Year` is different
+              addOneValueToAJSONarr('descriptors', 'Years', 'values', JSON.stringify({values: resultExistingYears}));
+              // create a new edge for the case when a descriptor shows up in another year
+              if (newEdge.length === 8) {
+                await createAnEdge(newEdge);
+              }
+            } else if (!resultExistingJournalAccrs.includes(row['JournalAccr'])) {
+              // treat the case when the accronim of the venue doesn't exist
+              addOneValueToAJSONarr('descriptors', 'JournalAccrs', 'values', JSON.stringify({values: resultExistingJournalAccrs}));
+              // treat the case when the descriptor shows up at the same year but to another article at another venue
+              if (newEdge.length === 8) {
+                await createAnEdge(newEdge);
+              }
+            }
+          
+          
+            // #1 Search the record
+            /*          
+            SELECT *
             FROM articles
-            WHERE json_extract(Kw, '$.values') LIKE '%"digital libraries"%'
-          );          
-          */ 
-        }        
-      });      
-    }
+            WHERE id IN (
+              SELECT Id
+              FROM articles
+              WHERE json_extract(Kw, '$.values') LIKE '%"digital libraries"%'
+            );          
+            */ 
+          }        
+        });        
+      }
+      return `Done!`;
   };
 
   /**
@@ -421,7 +431,6 @@ try {
     for (let descriptor of kwArr) {
       addUniqueDescriptorToTable(descriptor, row);
     }
-    // enrichDescriptorNodes(row); // FIXME: It crashes the process!!
   };
 
   // Parse all data from articles table and build descriptor and edges tables
@@ -430,19 +439,30 @@ try {
       throw new Error (`Selecting all data from the table articles, this error was thrown: ${error}`);
     }
 
+    // create the unique descriptors in their table
     rows.forEach(async function clbkForEveryRow (row) {
       if (test4empty(row)) {
         throw new Error(`It seems I found an empty row: ${error}`);
       }
-      // in case the keywords array value doesn' come empty
+      // in case the keywords array value doesn't come empty
       if (!test4empty(row['Kw'])) {        
         // let KwObj = JSON.parse(row['Kw']); // parse the object value in in Kw
         // let kwArr = KwObj['values'];       // set `kwArr` -> should be an array
 
-        await descriptorAndEdgeCreator(row); // function checks is the descriptor exists already, and if it does, checks if the other attributes are already in the columns meant to gather it (year[array] and the journal accronim[array])
-        // }
+        await descriptorAndEdgeCreator(row); 
+        // function checks is the descriptor exists already, and if it does, 
+        // checks if the other attributes are already in the columns meant 
+        // to gather it (year[array] and the journal accronim[array])
       }
     });
+
+    // enrich with data the descriptor on second passing
+    rows.forEach(function clbkEnrich4EveryRow (row) {
+      if (test4empty(row)) {
+        throw new Error(`It seems I found an empty row: ${error}`);
+      }
+      enrichDescriptorNodes(row); // FIXME: It crashes the process!!
+    });    
   });
 
 /*
