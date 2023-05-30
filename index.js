@@ -223,26 +223,36 @@ try {
    */
   async function createAnEdge (recordArray) {
     // console.log(`I'm ready to insert the following edge: ${recordArray}`);
-    db.get(`SELECT * FROM edges WHERE Source="${recordArray[0]}" AND Target="${recordArray[1]}"`, function clbkCheck4Existing (edge) {
-      if (test4empty(edge)) {
-        // #A Prepare the statement
-        let prepStmt = db.prepare(`INSERT INTO edges(${edgesTabelHeadStructure}) VALUES (${edgesTableValPlaceholders})`);
+    try {
+      db.get(`SELECT * FROM edges WHERE Source="${recordArray[0]}" AND Target="${recordArray[1]}"`, function clbkCheck4Existing (error, edge) {
 
-        // #B run the query
-        prepStmt.run(recordArray, function clbkInsertEdge (error) {
-          if (error) {
-            throw new Error(`Inserting an edge, this error appeared: ${error.message}`);
-          } else {
-            console.log(`Inserted edge no: ${this.lastID}`);
-          }
-        });
-
-        // #C Finalize!
-        prepStmt.finalize();
-      } else {
-        return console.log(`The edge exists already, I will not created again. Move along, nothing to see here!`);
-      }
-    });
+        if (error) {
+          throw new Error(`I was preparing to investigate if there is already an edge created prior for the inputed Souce and Target, and this error popped up: ${error}`);
+        }
+  
+        // the edge doesn't exist, so create one
+        if (edge === undefined) {
+          // #A Prepare the statement
+          let prepStmt = db.prepare(`INSERT INTO edges(${edgesTabelHeadStructure}) VALUES (${edgesTableValPlaceholders})`);
+  
+          // #B run the query
+          prepStmt.run(recordArray, function clbkInsertEdge (error) {
+            if (error) {
+              throw new Error(`Inserting an edge, this error appeared: ${error.message}`);
+            } else {
+              console.log(`Inserted edge no: ${this.lastID}`);
+            }
+          });
+  
+          // #C Finalize!
+          prepStmt.finalize();
+        } else {
+          return console.log(`The edge exists already, I will not created again. Move along, nothing to see here!`);
+        }
+      });      
+    } catch (error) {
+      throw new Error(`An error at createAnEdge: ${error}`);
+    }
   };
 
   /**
@@ -268,77 +278,85 @@ try {
 
   let clearing = new Set(); // clearing house for the descriptors
   /**
-   * Function pushes descriptors in `descriptors` table
-   * It also pushes the first edge in the edge table
-   * There are 20253 descriptors even when they double (10877 unique descriptors)
-   */
-  async function addUniqueDescriptorToTable (descriptor, row) {
-    // console.log(`The descriptor is ${descriptor} and is in the clearing ${clearing.has(descriptor)}`);
-    if (!clearing.has(descriptor) && !test4empty(descriptor)) {
-      clearing.add(descriptor);
-      // #A prepare and load the data
-      let prepStmt = db.prepare(`INSERT INTO descriptors(${descriptorsTabelHeadStructure}) VALUES (${descriptorsTableValPlaceholders})`);
-      let descriptorsRowIdxsReordered = []; // the array of the values bound to be inserted into the table
-
-      // create the hash
-      const hash = crypto.createHash('sha256');
-      hash.update(descriptor);
-
-      descriptorsRowIdxsReordered[0] = hash.digest('hex'); // the value for `hash` column
-      descriptorsRowIdxsReordered[1] = descriptor;  // the value for `descriptor` column
-      descriptorsRowIdxsReordered[2] = `${JSON.stringify({values: [row['Year']]})}`; // the value for `Year` column
-      descriptorsRowIdxsReordered[3] = `${JSON.stringify({values: [row['JournalAccr']]})}`; // the value for `JournalAccr` column
-
-      // #B run the query
-      prepStmt.run(descriptorsRowIdxsReordered, function clbkerrorinsert(error) {
-        if (error) {
-          throw new Error(`At inserting the data in the descriptors table, this error appeared: ${error.message}`);
-        }
-        console.log(`Processing descriptor: ${this.lastID}`);
-      });
-
-      // #C Finalize!
-      prepStmt.finalize();
-
-      // Create all the edges here and insert it in the edges table
-      let edge = [];
-      edge[0] = descriptorsRowIdxsReordered[0]; // [Source:string]
-      edge[1] = row['Id']; // [Target:string] this value is the id for the name of the article
-      edge[2] = 1; // [Weight:integer]
-      edge[3] = "Directed"; // [Type:string]
-      edge[4] = "descriptor"; // [Kind:string]
-      edge[5] = row['Label']; // [ArticleTitle:string]
-      edge[6] = row['Year']; // [Year:integer]
-      edge[7] = row['JournalAccr']; // [JournalAccr:string]
-
-      if (edge.length === 8) {
-        await createAnEdge(edge);
-      }
-
-      let TrackerObj = {
-        descriptor,
-        hash: descriptorsRowIdxsReordered[0],
-        origin: row
-      };
-
-      // fs.writeFile('./tracker.json', `${JSON.stringify(TrackerObj , null, 2)},`, 'utf8');
-    }
-  }
-
-  /**
-   * Function checks is the descriptor exists already, and if it does, 
-   * checks if the other attributes are already in the columns meant 
-   * to gather it (year[array] and the journal accronim[array])
+   * Function pushes descriptors in `descriptors` table.
+   * It also pushes the first edge in the edge table. There are 20253 descriptors even when they double (10877 unique descriptors)
+   * It checks is the descriptor exists already, and if it does, 
+   * It checks if the other attributes are already in the columns meant to gather it (year[array] and the journal accronim[array])
    * Criteria: `SELECT DISTINCT descriptor FROM descriptors WHERE descriptor="${descriptor}"` 
    * @param {String} descriptor 
    */
   async function descriptorAndEdgeCreator (row) {
-    let KwObj = JSON.parse(row['Kw']); // parse the object value in in Kw
-    let kwArr = KwObj['values'];       // set `kwArr` -> should be an array
-    // console.log(`The descriptor array for this row is ${kwArr}`);
-
-    for (let descriptor of kwArr) {
-      addUniqueDescriptorToTable(descriptor, row);
+    try {
+      let KwObj = JSON.parse(row['Kw']); // parse the object value in in Kw
+      let kwArr = KwObj['values'];       // set `kwArr` -> should be an array
+      // console.log(`The descriptor array for this row is ${kwArr}`);
+  
+      for (let descriptor of kwArr) {
+        // console.log(`The descriptor is ${descriptor} and is in the clearing ${clearing.has(descriptor)}`);
+        if (!clearing.has(descriptor) && !test4empty(descriptor)) {
+          clearing.add(descriptor);
+  
+          // first search if there is a already the same descriptor inserted in the table.
+          db.get(`SELECT * FROM descriptors WHERE descriptor="${descriptor}"`, async function clbkDescrPaitToArts (error, descrData) {
+            try {
+              if (descrData !== undefined && descriptor == descrData.descriptor) {
+                console.log(`I will not write another one because I found it already. Look: ${descrData.descriptor}. If you need to write fresh descriptors table, just delete it first.`);
+                return;
+              } else {
+                // #A prepare and load the data
+                let prepStmt = db.prepare(`INSERT INTO descriptors(${descriptorsTabelHeadStructure}) VALUES (${descriptorsTableValPlaceholders})`);
+    
+                /* === RECORD CREATION STAGE === */
+                const hash = crypto.createHash('sha256').update(descriptor); // create the needed hash (I chose to use a hash representation of the descriptor for which I know it will be trully unique).
+    
+                /* create and hidrate the array */
+                let descriptorsRowIdxsReordered = []; // the array of the values bound to be inserted into the table
+                descriptorsRowIdxsReordered[0] = hash.digest('hex'); // the value for `hash` column
+                descriptorsRowIdxsReordered[1] = descriptor;  // the value for `descriptor` column
+                descriptorsRowIdxsReordered[2] = `${JSON.stringify({values: [row['Year']]})}`; // the value for `Year` column
+                descriptorsRowIdxsReordered[3] = `${JSON.stringify({values: [row['JournalAccr']]})}`; // the value for `JournalAccr` column
+    
+                // #B run the query
+                prepStmt.run(descriptorsRowIdxsReordered, function clbkerrorinsert(error) {
+                  if (error) {
+                    throw new Error(`At inserting the data in the descriptors table, this error appeared: ${error.message}`);
+                  }
+                  console.log(`Processing descriptor: ${this.lastID}`);
+                });
+    
+                // #C Finalize!
+                prepStmt.finalize();
+    
+                // Create all the edges here and insert it in the edges table
+                let edge = [];
+                edge[0] = descriptorsRowIdxsReordered[0]; // [Source:string]
+                edge[1] = row['Id']; // [Target:string] this value is the id for the name of the article
+                edge[2] = 1; // [Weight:integer]
+                edge[3] = "Directed"; // [Type:string]
+                edge[4] = "descriptor"; // [Kind:string]
+                edge[5] = row['Label']; // [ArticleTitle:string]
+                edge[6] = row['Year']; // [Year:integer]
+                edge[7] = row['JournalAccr']; // [JournalAccr:string]
+    
+                if (edge.length === 8) {
+                  await createAnEdge(edge);
+                }
+    
+                // let TrackerObj = {
+                //   descriptor,
+                //   hash: descriptorsRowIdxsReordered[0],
+                //   origin: row             
+    
+                // fs.writeFile('./tracker.json', `${JSON.stringify(TrackerObj , null, 2)},`, 'utf8');
+              }            
+            } catch (error) {
+              throw new Error (`This error was generated at the time I tried to insert the first descriptor ${error}`);
+            }
+          });
+        }
+      }      
+    } catch (error) {
+      throw new Error(`An error ar descriptorAndEdgeCreator is: ${error}`)
     }
   };
 
@@ -375,7 +393,7 @@ try {
         let articlesIds = records.map(rec => rec['Target']);
 
         // console.log(`The Ids I need are  ${JSON.stringify(articlesIds)}`);
-        if (articlesIds.length >= 2) {
+        if (articlesIds.length >= 2 && articlesIds.length <= 5) {
           // console.log(`This segment has ${articlesIds.length} Ids`);
           // if (articlesIds.length > 5) {
           //   console.log(`Better check this one out ${JSON.stringify(articlesIds)} for the ${descriptorRecord['hash']}\n`);
@@ -385,34 +403,31 @@ try {
           
           // You better have at least 8 cores for this :)))) MUHHAHAHAHAHAHAHA!
           let newEdges = generateDistinctPairs(articlesIds); // gives you all the possible combinations
-
-          // FIXME: Hmmmmm... find another way
-          // for (let combo of newEdges) {
-          //   // let sourceRowData = await getRecordsFromTable(articles, Id, combo[0]);
-          //   // let targetRowData = await getRecordsFromTable(articles, Id, combo[1]);
-          //   db.each(`SELECT * FROM 'articles' WHERE 'Id'="${combo[0]}"`, (error, combo0Rec) => {
-          //     if (error) {
-          //       throw new Error (`An error has been issued when accessing the articles table trying to get data for the article in the <Source> position: ${error}`);
-          //     }
-          //     // data for the article in the `Source` position
+          for (let combo of newEdges) {
+            // let sourceRowData = await getRecordsFromTable(articles, Id, combo[0]);
+            // let targetRowData = await getRecordsFromTable(articles, Id, combo[1]);
+            db.each(`SELECT * FROM 'articles' WHERE 'Id'="${combo[0]}"`, (error, combo0Rec) => {
+              if (error) {
+                throw new Error (`An error has been issued when accessing the articles table trying to get data for the article in the <Source> position: ${error}`);
+              }
+              // data for the article in the `Source` position
           
-          //     // And down to the pyramid of dooooooommmmmm! Save me Obi Wan! You are my only hope!
-          //     db.each(`SELECT * FROM 'articles' WHERE 'Id'="${combo[1]}"`, async (error, combo1Rec) => {
-          //       if (error) {
-          //         throw new Error (`An error has been issued when accessing the articles table trying to get data for the article in the <Target> position: ${error}`);
-          //       }
-          //       // data for the article in the `Target` position
-          //       let newArticleEdge = [...combo, 1, "Undirected", descriptorRecord['descriptor'], " ", `${combo0Rec['Year']},${combo1Rec['Year']}`,  `${combo0Rec['JournalAccr']},${combo1Rec['JournalAccr']}`];
-          //       console.log(`The inbound edge: ${newArticleEdge}`);
-          //       let line = newArticleEdge.join('","') + '\n';
-          //       if (newArticleEdge.length === 8) {
-          //         fs.appendFile('./articledges.csv', line, 'utf8');
-          //         // await createAnEdge(newArticleEdge);
-          //       }
-          //     });  
-          //   });
-          // }
-
+              // And down to the pyramid of dooooooommmmmm! Save me Obi Wan! You are my only hope!
+              db.each(`SELECT * FROM 'articles' WHERE 'Id'="${combo[1]}"`, async (error, combo1Rec) => {
+                if (error) {
+                  throw new Error (`An error has been issued when accessing the articles table trying to get data for the article in the <Target> position: ${error}`);
+                }
+                // data for the article in the `Target` position
+                let newArticleEdge = [...combo, 1, "Undirected", descriptorRecord['descriptor'], " ", `${combo0Rec['Year']},${combo1Rec['Year']}`,  `${combo0Rec['JournalAccr']},${combo1Rec['JournalAccr']}`];
+                console.log(`The inbound edge: ${newArticleEdge}`);
+                let line = newArticleEdge.join('","') + '\n';
+                if (newArticleEdge.length === 8) {
+                  fs.appendFile('./articledges.csv', line, 'utf8');
+                  // await createAnEdge(newArticleEdge);
+                }
+              });  
+            });
+          }
         }
       });
     }
@@ -443,49 +458,70 @@ try {
    * Function will enrich all the records in the descriptors table
    * It will add years for the same descriptor where this one shows up for the articles
    * It will create edges in certain cases
-   * @param {Object} row 
+   * @param {Object} row is a row from the `articles` table
    */
-  function enrichDescriptorNodes (row) {  
-    let KwObj = JSON.parse(row['Kw']); // parse the object value in in Kw
-    let kwArr = KwObj['values'];       // set `kwArr` -> should be an array
-    // console.log(`The descriptor array for this row is ${kwArr}`);
+  function enrichDescriptorNodes (descriptor, row) {
+      // get my data
 
-    for (let descriptor of kwArr) {
+      db.run(`CREATE TABLE IF NOT EXISTS descriptors (${descriptorsTabelHeadStructure})`);
+
       db.get(`SELECT * FROM descriptors WHERE descriptor="${descriptor}"`, async function clbkChec4ExistanceOfDescr (error, result) {
         if (error) {
           throw new Error (`Searching for the same descriptor, I came upon this error: ${error.message}`, error);
+        } else if (result === undefined) {
+          console.log(`For descriptor ${descriptor} I don't have a record in descriptors\n`);
+          fs.appendFile('./enrichmentIssues.log', `For descriptor ${descriptor} I don't have a record in descriptors\n`, 'utf-8');
+          return;
         }
-        if (!test4empty(result)) {
-          
+
+        // first test if the result is empty
+        if (!test4empty(result)) {          
+
+          /* === Work with the existing Years array === */
           // Extract the year and compare with the values already existing
-          let yearsParsed = JSON.parse(result['Years']);  // transform the JSON text into an object
+          let yearsParsed = JSON.parse(result['Years']);   // transform the JSON text into an object
+          let resultExistingYears = yearsParsed['values']; // extract the array
 
-          console.log(`The object under scrutiny is ${yearsParsed} belonging to ${row.descriptor}`);
+          // Check to have a real array in the value. Bit me very nasty!
+          if (typeof(resultExistingYears) === 'string') {
+            resultExistingYears = JSON.parse(resultExistingYears);
+          }
 
-          let resultExistingYears = yearsParsed['values'];// extract the array
           // first test if there is an array of years
           if (Array.isArray(resultExistingYears)) {
             if (row['Year'] !== undefined && !resultExistingYears.includes(row['Year'])) {
               resultExistingYears.push(row['Year']);
-            }; // update the years to include the new year as well
+            } // update the years to include the new year as well
           } else {
-            throw new Error (`There is something fishy with this tranformation. I expected an array and came about this ${resultExistingYears}`);
+            throw new Error (`There is something fishy with this tranformation. 
+            I expected an array and came about this ${resultExistingYears} which is revealed to be: ${inspect(resultExistingYears)}. 
+            Test 4 arr: ${Array.isArray(resultExistingYears)}
+            The resultExistingYears back to JSON is: ${JSON.stringify(resultExistingYears)}.
+            Is it a string: ${typeof(resultExistingYears) === 'string'}.
+            But noow ${Array.isArray(JSON.parse(resultExistingYears))}
+            `);
           }
 
+          /* === Work with the existing JournalAccrs array === */
           let JournalAccrs = JSON.parse(result['JournalAccrs']);  // transform the JSON text into an object
           let resultExistingJournalAccrs = JournalAccrs['values'];// extract the array
+
+          // Check to have a real array in the value. Bit me very nasty!
+          if (typeof(resultExistingJournalAccrs) === 'string') {
+            resultExistingJournalAccrs = JSON.parse(resultExistingJournalAccrs);
+          }
+
           // first test id there is an aray of values
           if (Array.isArray(resultExistingJournalAccrs)) {
             if (row['JournalAccr'] !== undefined && !resultExistingJournalAccrs.includes(row['JournalAccr'])) {
               resultExistingJournalAccrs.push(row['JournalAccr'])
-            }; // update de Accrs to include the new journal accr as well
+            } // update de Accrs to include the new journal accr as well
           } else {
-            throw new Error (`There is something fishy with this tranformation. I expected an array and came about this ${resultExistingJournalAccrs}`);
+            throw new Error (`There is something fishy with this tranformation. I expected an array and came about this ${inspect(resultExistingJournalAccrs)}`);
           }
 
-          let shoutout = `For the existing descriptor with id <${result.descriptor}>, value of JournalAccrs was ${result['JournalAccrs']}, and ${result['Years']} transformed into ${JournalAccrs}, and ${resultExistingYears}.\n`;
-          console.log(shoutout);
-          fs.appendFile('./descriptorenrichment.txt', shoutout, 'utf-8');
+          let shoutout = `For the existing descriptor with id <${result.descriptor}>, value of JournalAccrs is ${result['JournalAccrs']}, and ${result['Years']} transformed into ${JSON.stringify(JournalAccrs)}, and ${JSON.stringify(resultExistingYears)}.\n`;
+          fs.appendFile('./descriptorenrichment.log', shoutout, 'utf-8');
 
           // prepare the new edge
           let newEdge = [];
@@ -498,6 +534,7 @@ try {
           newEdge[6] = row['Year'];        // [Year:integer]
           newEdge[7] = row['JournalAccr']; // [JournalAccr:string]
         
+          /* === Modification stages === */
           // The case when the year and the JournalAccr are missing from their coresponding arrays of the descriptor
           if (!resultExistingYears.includes(row['Year'] && !resultExistingJournalAccrs.includes(row['JournalAccr']))) {        
             // if the `Year` value in the row (of the `descriptors` table) doesn't exist
@@ -525,16 +562,14 @@ try {
             addOneValueToAJSONarr('descriptors', 'Years', 'values', JSON.stringify(resultExistingYears));
             // create a new edge for the case when a descriptor shows up in another year
             if (newEdge.length === 8) {
-              // FIXME::::!!!
-              // await createAnEdge(newEdge);
+              await createAnEdge(newEdge);
             }
           } else if (!resultExistingJournalAccrs.includes(row['JournalAccr'])) {
             // treat the case when the accronim of the venue doesn't exist
             addOneValueToAJSONarr('descriptors', 'JournalAccrs', 'values', JSON.stringify(resultExistingJournalAccrs));
             // treat the case when the descriptor shows up at the same year but to another article at another venue
             if (newEdge.length === 8) {
-              // FIXME::::!!!
-              // await createAnEdge(newEdge);
+              await createAnEdge(newEdge);
             }
           }        
         
@@ -548,9 +583,11 @@ try {
             WHERE json_extract(Kw, '$.values') LIKE '%"digital libraries"%'
           );          
           */ 
-        }        
-      });        
-    }
+        } else {
+          throw new Error (`I began enriching the descriptors, but searching for this particular one (${descriptor}) came up empty.`);
+        }     
+      });   
+
     return `Done!`;
   };
 
@@ -560,33 +597,58 @@ try {
       throw new Error (`Selecting all data from the table articles, this error was thrown: ${error}`);
     }
 
-    /* === create the unique descriptors in their table === */
-    rows.forEach(async function clbkForEveryRow (row) {
-      if (test4empty(row)) {
-        throw new Error(`It seems I found an empty row: ${error}`);
-      }
-      // in case the keywords array value doesn't come empty
-      if (!test4empty(row['Kw'])) {
-        await descriptorAndEdgeCreator(row); 
+    // Create the descriptors and edges for the first time. When you run `node index.js` for the first time
+    db.get(`SELECT * FROM descriptors`, function (error, descrrow) {
+      console.log(`To create the first round of descriptors and their corresponding edges, the descriptor table must be empty. Better delete first descriptors and edges tables.`);
+      if (error) {
+        throw new Error(`I've checked to see if there is at least one row in descriptors table and this error popped up: ${error}`);
+      } else if (test4empty(descrrow)) {
+        /* === create the unique descriptors in their table === */
+        rows.forEach(async function clbkForEveryRow (row) {
+          if (test4empty(row)) {
+            throw new Error(`It seems I found an empty row: ${error}`);
+          }
+          // in case the keywords array value doesn't come empty
+          if (!test4empty(row['Kw'])) {
+            await descriptorAndEdgeCreator(row); 
+          }
+        });
       }
     });
+  });
 
+  // Parse all data from articles table and enrich the descriptors table. Another call to node index.js has to be made in order to start it
+  db.all(`SELECT * FROM articles`, function clbkparseDataOneTbl (error, rows) {
+    if (error) {
+      throw new Error (`Selecting all data from the table articles, for the enrichment of descriptors, this was thrown: ${error}`);
+    }
     /* === enrich with data the descriptor on second passing === */
     rows.forEach(function clbkEnrich4EveryRow (row) {
       if (test4empty(row)) {
         throw new Error(`It seems I found an empty row: ${error}`);
       }
-      enrichDescriptorNodes(row);
-    });
+      let KwObj = JSON.parse(row['Kw']); // parse the object value in in Kw
+      let kwArr = KwObj['values'];       // set `kwArr` -> should be an array
 
-    /* === Create edges between articles === FIXME: Do not acivate this until fixed*/
-    // rows.forEach(function clbkEnrich4EveryRow (row) {
-    //   if (test4empty(row)) {
-    //     throw new Error(`It seems I found an empty row: ${error}`);
-    //   }
-    //   articlesGraphCreator(row);
-    // });
+      for (let descriptor of kwArr) {    
+        if (descriptor === undefined) {
+          console.log(`This article <${row.Label}> has a descriptor of ${inspect(descriptor)}`);
+        }
+        enrichDescriptorNodes(descriptor, row);
+      }          
+    });
   });
+  
+  // Highly controversial :D :D :D If you don't have 8 cores and at least 16GB of RAM, do not activate this piece of code. Creates combinations.
+  // db.all(`SELECT * FROM articles`, function clbkparseDataOneTbl (error, rows) {
+  //   /* === Create edges between articles === FIXME: Do not acivate this until fixed*/
+  //   rows.forEach(function clbkEnrich4EveryRow (row) {
+  //     if (test4empty(row)) {
+  //       throw new Error(`It seems I found an empty row: ${error}`);
+  //     }
+  //     articlesGraphCreator(row);
+  //   });
+  // });
 
 /*
 

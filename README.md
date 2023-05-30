@@ -12,7 +12,7 @@ Requirements:
 - Ensure you have Node.js version 20.2.0 (i suggest installing with nvm);
 - Create a file in the root of the project called publications.sqlite. This will be the Sqlite3 database.
 
-Important note: This is work in progress. The first stable app will be marked by the first release.
+Important note: This is work in progress. The first stable app will be marked by the first release. This application is as it is. I do not guarantee for the safety of your data. It is a well behaved application, but let nt sleep on that, shall we?!
 
 Details for using the app, in this section of the documentation: [loadingdata](DOCS/lodingdata.md).
 
