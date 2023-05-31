@@ -462,9 +462,6 @@ try {
    */
   function enrichDescriptorNodes (descriptor, row) {
       // get my data
-
-      db.run(`CREATE TABLE IF NOT EXISTS descriptors (${descriptorsTabelHeadStructure})`);
-
       db.get(`SELECT * FROM descriptors WHERE descriptor="${descriptor}"`, async function clbkChec4ExistanceOfDescr (error, result) {
         if (error) {
           throw new Error (`Searching for the same descriptor, I came upon this error: ${error.message}`, error);
@@ -634,6 +631,7 @@ try {
         if (descriptor === undefined) {
           console.log(`This article <${row.Label}> has a descriptor of ${inspect(descriptor)}`);
         }
+        db.run(`CREATE TABLE IF NOT EXISTS descriptors (${descriptorsTabelHeadStructure})`);
         enrichDescriptorNodes(descriptor, row);
       }          
     });
@@ -641,7 +639,7 @@ try {
   
   // Highly controversial :D :D :D If you don't have 8 cores and at least 16GB of RAM, do not activate this piece of code. Creates combinations.
   // db.all(`SELECT * FROM articles`, function clbkparseDataOneTbl (error, rows) {
-  //   /* === Create edges between articles === FIXME: Do not acivate this until fixed*/
+  //   /* === Create edges between articles === */
   //   rows.forEach(function clbkEnrich4EveryRow (row) {
   //     if (test4empty(row)) {
   //       throw new Error(`It seems I found an empty row: ${error}`);
