@@ -2,12 +2,27 @@
 	"nodes":[
 		{"type":"text","text":"Read async the csv file resulted from Zotero export","id":"b86727ff2808c52b","x":-241,"y":-324,"width":250,"height":60,"color":"2"},
 		{"type":"link","url":"https://csv.js.org/","id":"95b63159e72d66ee","x":280,"y":-580,"width":400,"height":400},
-		{"id":"764549fe6f0aa2fc","x":-820,"y":-360,"width":400,"height":333,"type":"link","url":"https://www.npmjs.com/package/sqlite3?activeTab=readme"},
-		{"id":"d63d9e0e311da30f","x":-241,"y":-140,"width":250,"height":60,"type":"text","text":"Manage the articles using a Sqlite3 local ad-hoc db"}
+		{"type":"text","text":"Manage the articles using a Sqlite3 local ad-hoc db","id":"d63d9e0e311da30f","x":-241,"y":-500,"width":250,"height":60},
+		{"id":"372d2c7c390e59cf","x":-396,"y":-120,"width":560,"height":320,"color":"1","type":"text","text":"/**\n\n* The function will process the rest of the steps:\n\n* creating data in descriptors and building edges\n\n* Calls `populateArticlesTable()`\n\n* Calls `descriptorAndEdgeCreator(row)`\n\n* Calls `enrichDescriptors()`\n\n*/\n\nasync function stagesProcessing ()"},
+		{"id":"0ddf35f3d13a9e42","x":-1000,"y":160,"width":460,"height":180,"color":"4","type":"text","text":"    /**\n     * The function is populating the `articles` \n     * table with the data from the source file\n    */\n    async function populateArticlesTable () "},
+		{"id":"29d4baa9648876b2","x":158,"y":250,"width":645,"height":430,"color":"2","type":"text","text":"/**\n\n* Function pushes descriptors in `descriptors` table.\n\n* It also pushes the first edge in the edge table.\n\n* It checks is the descriptor exists already, and if it does,\n\n* It checks if the other attributes are already in the columns meant to gather it:\n\n* - (year[array] and the journal accronim[array])\n\n* Criteria: `SELECT DISTINCT descriptor FROM descriptors WHERE descriptor=\"${descriptor}\"`\n\n* Calls `createAnEdge(edge)`\n\n* @param {String} descriptor\n\n*/\n\nasync function descriptorAndEdgeCreator (row)"},
+		{"id":"1e3bdf4469fa6215","x":580,"y":-100,"width":370,"height":220,"color":"5","type":"text","text":"/**\n\n* Function creates a new record in the `edges` table\n\n* @param {Array} recordArray\n\n*/\n\nasync function createAnEdge (recordArray)"},
+		{"id":"2ee9e5442cadce74","x":-500,"y":340,"width":520,"height":425,"color":"5","type":"text","text":"/**\n\n* The function enriches descriptors with supplementary\n\n* data as far as the same descriptor is encontered in\n\n* another article. Enrichment with the year and accr\n\n* It will be called for every keyword in the article's keyword array\n\n* It will add years for the same descriptor where this one shows up for the articles\n\n* It will create edges in certain cases\n\n* Calls `createAnEdge()`\n\n* Calls `addOneValueToAJSONarr`\n\n*/\n\nasync function enrichDescriptors ()"},
+		{"id":"5aaaa36500c8997b","x":-1140,"y":420,"width":525,"height":345,"type":"text","text":"/**\n\n* The function adds one value to an array existing in\n\n* a JSON value of a cell in a particular table\n\n* @param {*} tableName\n\n* @param {*} columName\n\n* @param {*} keyName\n\n* @param {JSON} value\n\n*/\n\nasync function addOneValueToAJSONarr (tableName, columName, keyName, value, hash)"},
+		{"type":"link","url":"https://www.npmjs.com/package/sqlite3?activeTab=readme","id":"764549fe6f0aa2fc","x":-877,"y":-636,"width":400,"height":333},
+		{"id":"40ed6a7a0bfadde1","x":-1000,"y":-264,"width":505,"height":260,"color":"#8cded0","type":"text","text":"/**\n\n* Function is a callback for `on(\"data\", clbkWorkOnRow)`\n\n* This is the place whre table articles gets hidrated\n\n* with data from the chunk\n\n* @param {Object} row\n\n*/\n\nfunction processDataRow(row)"}
 	],
 	"edges":[
-		{"id":"cef46f54a8f350f3","fromNode":"b86727ff2808c52b","fromSide":"bottom","toNode":"d63d9e0e311da30f","toSide":"top"},
 		{"id":"3d999b89e2903072","fromNode":"95b63159e72d66ee","fromSide":"left","toNode":"b86727ff2808c52b","toSide":"right","label":"use\nstreams"},
-		{"id":"9c148203104f1e1a","fromNode":"764549fe6f0aa2fc","fromSide":"right","toNode":"d63d9e0e311da30f","toSide":"left","label":"use\nSqlite3"}
+		{"id":"9c148203104f1e1a","fromNode":"764549fe6f0aa2fc","fromSide":"right","toNode":"d63d9e0e311da30f","toSide":"left","label":"use\nSqlite3"},
+		{"id":"af9426e4340469e2","fromNode":"d63d9e0e311da30f","fromSide":"bottom","toNode":"b86727ff2808c52b","toSide":"top"},
+		{"id":"9df8f20ffc25c1f5","fromNode":"b86727ff2808c52b","fromSide":"bottom","toNode":"372d2c7c390e59cf","toSide":"top"},
+		{"id":"414265f8a8e6f7c5","fromNode":"372d2c7c390e59cf","fromSide":"left","toNode":"0ddf35f3d13a9e42","toSide":"top"},
+		{"id":"dfae8b6255a6bf7a","fromNode":"372d2c7c390e59cf","fromSide":"right","toNode":"29d4baa9648876b2","toSide":"top"},
+		{"id":"16fe6913c7b76fa1","fromNode":"29d4baa9648876b2","fromSide":"top","toNode":"1e3bdf4469fa6215","toSide":"left","label":"await createAnEdge(edge)"},
+		{"id":"4d6565d405cc7643","fromNode":"372d2c7c390e59cf","fromSide":"bottom","toNode":"2ee9e5442cadce74","toSide":"top"},
+		{"id":"23fc93ba833a3427","fromNode":"2ee9e5442cadce74","fromSide":"right","toNode":"1e3bdf4469fa6215","toSide":"left"},
+		{"id":"7fbb8c29de71b823","fromNode":"2ee9e5442cadce74","fromSide":"left","toNode":"5aaaa36500c8997b","toSide":"right"},
+		{"id":"529572f5bea605e1","fromNode":"0ddf35f3d13a9e42","fromSide":"top","toNode":"40ed6a7a0bfadde1","toSide":"bottom"}
 	]
 }
