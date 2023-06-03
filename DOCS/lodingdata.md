@@ -2,7 +2,7 @@
 
 For creating the necessary data, I follow the guide presented by Clement Levallois here [5 methods to create and import networks in Gephi](https://www.youtube.com/watch?v=ltkzcSAStYo)
 
-Data is loaded in the database launching the application from terminal with `node index.js`. Mind that sometimes, if you re-run the app after you have deleted the `articles` and `descriptors` tables, the app might complain with possible messages like the following.
+Data is loaded in the database launching the application from terminal with `node app.js`. Mind that sometimes, if you re-run the app after you have deleted the `articles` and `descriptors` tables, the app might complain with possible messages like the following.
 
 ![](tableNotFound.png)
 
