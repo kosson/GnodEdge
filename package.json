@@ -1,7 +1,9 @@
 {
   "dependencies": {
+    "consola": "^3.1.0",
     "csv-parse": "^5.3.10",
     "inquirer": "^9.2.6",
+    "log-update": "^5.0.1",
     "sqlite": "^4.2.1",
     "sqlite3": "^5.1.6"
   },
