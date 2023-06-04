@@ -132,20 +132,20 @@ import { open } from 'sqlite'
 
     if (tablesOK) {
       let noTblArticles = await db.get(`SELECT count(*) as artNrs FROM articles`);
-      // if articles tabel is empty, hidrate
+      // if articles table is empty, hydrate
       if (!noTblArticles.artNrs > 0) {
         await populateArticlesTable();
       }
     }
 
     /**
-     * Encapsulated functions needed for articles table hidration
+     * Encapsulated functions needed for articles table hydration
      * @returns {Boolean}
      */
     async function populateArticlesTable () {
       /**
        * Function is a callback for `on("data", clbkWorkOnRow)`
-       * This is the place whre table articles gets hidrated
+       * This is the place whre table articles gets hydrated
        *  with data from the chunk
        * @param {Object} row 
        */
@@ -160,7 +160,7 @@ import { open } from 'sqlite'
             if (nodesIdxsAreArrays.includes(idx)) {            
               let valuesArr = row[idx].split('; '); // the array of values 
               if (valuesArr.length > 0) {
-                // console.log(`The values when we have actualy an array ${JSON.stringify(valuesArr)}`); // ["Silva, Paulo","Matos, Miguel","Barreto, João"]
+                // console.log(`The values when we have actually an array ${JSON.stringify(valuesArr)}`); // ["Silva, Paulo","Matos, Miguel","Barreto, João"]
                 return `${JSON.stringify(valuesArr)}`;
               } else {
                 console.log(`I have inserted in article table entity ${row[1]}`);            
@@ -194,7 +194,7 @@ import { open } from 'sqlite'
               await processDataRow(row);
             })
             .on("end", function () {
-                console.log(`I've finished reading the CSV. Data is still being writen in the articles table`);
+                console.log(`I've finished reading the CSV. Data is still being written in the articles table`);
             })
             .on("error", function (error) {
                 throw new Error(error);
@@ -216,36 +216,45 @@ import { open } from 'sqlite'
      * Calls `descriptorAndEdgeCreator(row)`
      * Calls `enrichDescriptors()`
      */
-    async function stagesProcessing () {
+    async function stagesProcessingOne () {
       try {
+        let testForArticles = await db.get(`SELECT count(*) as arts FROM articles`);
         // out of every row in articles, generate descriptors and primary edges
-        let articlesRows = await db.each(`SELECT * FROM articles`, async function clbkparseDataOneTbl (error, row) {
-          if (error) {
-            throw new Error (`Selecting all data from the table articles, this error was thrown: ${error}`);
-          }
-
-          if (row) {
+        if (testForArticles.arts > 0) {
+          let articleBatch = await db.all(`SELECT * FROM articles`);
+          let kontor = 0;
+          for (let row of articleBatch) {
             await descriptorAndEdgeCreator(row);
-          } else {
-            throw new Error(`I was expecting a row from articles table and I've got this: ${inspect(row)}`);
+            ++kontor;
+            if (kontor === testForArticles?.arts) {
+              console.log(`I've finished creating descriptors and their primary edges ${kontor}`);
+              return {success: true};
+            }
           }
-        });
-
-        // if (articlesRows > 0) {
-        //   /* === proceed with deep enrichment === */
-        //   await enrichDescriptor(null, null, null, false);
-        // }
-        // console.log(`The number of records in articles table is: ${JSON.stringify(articlesRows)}`);
-
+        }
       } catch (error) {
         throw new Error (`From stagesProcessing() : ${error}`);
       }
     };
 
     // process the stages of creating the descriptors and the primary edges      
-    // await stagesProcessing();
+    let resultStageOne = await stagesProcessingOne();
 
-    await enrichDescriptor(null, null, null, false);
+    async function stagesProcessingTwo () {
+      if (resultStageOne?.success === true) {
+        /* === proceed with deep enrichment === */
+        await enrichDescriptor(null, null, null, false);
+      } else {
+        return;
+      }
+    };
+    await stagesProcessingTwo();
+
+    logUpdate(`
+      The number of unique descrs ${noOfDescrProcessed}
+      The edge exists already. Counting already inserted ones: ${noEdgesSearch}     
+      The existing descriptors encountered: ${noDescrExisting} 
+    `);
     /* ---------------------------------------------------------------------------------------------------------------------------- */
 
     /**
@@ -253,10 +262,8 @@ import { open } from 'sqlite'
      * @param {Array} recordArray 
      */
     async function createAnEdge (recordArray) {
-      // 0825efc283c9919d0363e3dae5d34490ad1966e5fb47fb7056f5c3029838bde3,97FE9V2W,1,Directed,descriptor,FREME: A Framework for Multilingual and Semantic Enrichment of Digital Content,2016,SWIB
       try {
         let edgesSearched = await db.get(`SELECT * FROM edges WHERE Source=? AND Target=?`, [recordArray[0], recordArray[1]]);
-        // logUpdate(`I searched the edges and I found ${JSON.stringify(edgesSearched)}`);
         if (edgesSearched === undefined) {
 
           // #A Prepare the statement
@@ -266,7 +273,7 @@ import { open } from 'sqlite'
           if (Array.isArray(recordArray)) {
             await stmt.bind(recordArray);
           } else {
-            throw new Error (`I dont have an array for the recordArray value`);
+            throw new Error (`I don't have an array for the recordArray value`);
           }           
   
           // #C Finalize!
@@ -282,7 +289,7 @@ import { open } from 'sqlite'
     /**
      * The function adds one value to an array existing in 
      * a JSON value of a cell in a particular table
-     * If there is no such JSON object, the moded value will overwrite the existing 
+     * If there is no such JSON object, the modded value will overwrite the existing 
      * @param {String} tableName The name of the table you target
      * @param {String} columName The name of the column the JSON value is
      * @param {String} keyName The name of the key under which the JSON object resides 
@@ -305,7 +312,8 @@ import { open } from 'sqlite'
         if (mod !== undefined) {
           // treat case when there is no keyName
           let target = undefined;
-          if (keyName === undefined) {
+
+          if (keyName === '') {
             target = `?`;
           } else {
             target = `json_set(${columName}, '$.${keyName}', ?)`;
@@ -316,18 +324,19 @@ import { open } from 'sqlite'
             SET ${columName} = ${target} 
             WHERE ${colTarget} = ?;
           `;
-          // let targetModified = await db.run(query, [`${mod}`, `${colValue}`]);
 
-          // if (targetModified.changes === 1) {
-          //   let now = new Date();
-          //   let descEnriched = `${this.changes} enrichment for descriptor: ${columName}\n`;
-          //   fs.appendFile(`./logs/descriptorenrichment.log`, `[${now.toUTCString()}] : ${descEnriched}`, 'utf-8');
-          // }
+          // insert in table the row
+          let targetModified = await db.run(query, [`${mod}`, `${colValue}`]);
 
-          let stmt = await db.prepare(query);
-          await stmt.bind([`${mod}`, `${colValue}`]);
-          await stmt.get();
+          let now = new Date();
+          if (targetModified === undefined) {            
+            let descEnrichedIssue = `Enrichment for descriptor: ${colValue} with the values ${mod} failed\n`;
+            fs.appendFile(`./logs/descriptorenrichment_error.log`, `[${now.toUTCString()}] : ${descEnrichedIssue}`, 'utf-8'); 
+          }
 
+          if (targetModified?.changes === 1) {
+            logUpdate(`Enrichment for ${colValue} went nominal.`);
+          }
         } else {
           throw new Error(`The value you want to update the field with not ok: ${inspect(mod)}`);
         }
@@ -335,7 +344,6 @@ import { open } from 'sqlite'
         throw new Error(`[addOneValueToAJSONarr]: ${error}`);
       }
     }
-
     
     /**
      * Function pushes descriptors in `descriptors` table.
@@ -359,22 +367,19 @@ import { open } from 'sqlite'
               /* === DESCRIPTOR RECORD CREATION STAGE === */
               const hash = crypto.createHash('sha256').update(i).digest('hex'); // create the needed hash (I chose to use a hash representation of the descriptor for which I know it will be trully unique).
 
-              /* create and hidrate the array of values for one row in descriptors table */
-              let descriptorsRowIdxsReordered = [];                                        // the array of the values bound to be inserted into the table
-              descriptorsRowIdxsReordered[0]  = hash;                                      // the value for `hash` column
-              descriptorsRowIdxsReordered[1]  = i;                                // the value for `descriptor` column
+              /* create and hydrate the array of values for one row in descriptors table */
+              let descriptorsRowIdxsReordered = [];                                   // the array of the values bound to be inserted into the table
+              descriptorsRowIdxsReordered[0]  = hash;                                 // the value for `hash` column
+              descriptorsRowIdxsReordered[1]  = i;                                    // the value for `descriptor` column
               descriptorsRowIdxsReordered[2]  = JSON.stringify([row['Year']]);        // the value for `Year` column MUST BE an Array
               descriptorsRowIdxsReordered[3]  = JSON.stringify([row['JournalAccr']]); // the value for `JournalAccr` column MUST BE an Array
               
               // console.log(`The array I have prepared to pass as values is ${inspect(descriptorsRowIdxsReordered)}`);
               let descriptorExisting = await db.get(`SELECT DISTINCT * FROM descriptors WHERE hash = ?`, hash);
-              // consola.info(`Obj is ${descriptorExisting}`);
               if (descriptorExisting === undefined) {                
                 let descriptorRecordJustInserted = await db.run(`INSERT INTO descriptors(${descriptorsTabelHeadStructure}) VALUES (${descriptorsTableValPlaceholders})`, descriptorsRowIdxsReordered);
-                consola.info(`Last descriptor in: ${descriptorRecordJustInserted.lastID}`);
               } else {
                 noDescrExisting++;
-                // consola.info(`BANG:`, JSON.stringify(descriptorExisting));
                 await enrichDescriptor(i, descriptorExisting, row, true); // true means you only want one enrichment from the current row from articles. At a latter stage procede with full enrichment
               }              
 
@@ -402,6 +407,7 @@ import { open } from 'sqlite'
         throw new Error(`From descriptorAndEdgeCreator() : ${error}`);
       }
     };
+
     /**
      * Function generates al the possible pairing between certain identifiers
      * Helper function for `createArticleToArticleEdge` function
@@ -502,7 +508,7 @@ import { open } from 'sqlite'
 
     /**
      * The function enriches descriptors with supplementary
-     * data as far as the same descriptor is encontered in 
+     * data as far as the same descriptor is encountered in 
      * another article. Enrichment with the year and accr
      * It will be called for every keyword in the article's keyword array
      * It will add years for the same descriptor where this one shows up for the articles
@@ -517,7 +523,7 @@ import { open } from 'sqlite'
     async function enrichDescriptor (descName, dRow, aRow, oneDescriptor) {
       try {
         // enrich only one existing descriptor with the year and accr data from the article row in which it was encountered
-        if (oneDescriptor) {
+        if (oneDescriptor === true) {
           let ayear  = aRow['Year'];
           let aaccr  = aRow['JournalAccr'];
           let dyears = JSON.parse(dRow['Years']);
@@ -550,115 +556,116 @@ import { open } from 'sqlite'
             await createAnEdge(newEdge);
           }
         } 
-        else {
+        else if(oneDescriptor === false) {
           // process descriptors
           let allArticles = await db.all(`SELECT * FROM articles`);
-          consola.info(`All the records are ${allArticles.length}`);
-
           for (let articleRow of allArticles) {
             let kwArr = JSON.parse(articleRow['Kw']); // parse the array in Kw
             for (let descriptor of kwArr) {
-              const hash = crypto.createHash('sha256').update(descriptor).digest('hex');
-              /* === get the row from descriptors table for the passed value === */
-              let descriptorRow = await db.get(`SELECT DISTINCT * FROM descriptors WHERE hash = ?`, hash);
-              // consola.info(`Obiectul este ${inspect(descriptorRow)}`);
-
-              let scoreboard = [false, false, false]; // [0:yearsArr] [1:accrsArr] [2:both]
-
-              /* === Work with the existing Years array === */
-              // Extract the year and compare with the values already existing
-              let yearsArr = JSON.parse(descriptorRow['Years']); // parse JSON value        
-              // first test if there is an array of years
-              if (Array.isArray(yearsArr)) {
-                // every article has one Year value; If you have an year in the article record and that very year is not in the array colected from the descriptor row
-                if (articleRow['Year'] !== undefined && !yearsArr.includes(articleRow['Year'])) {
-                  yearsArr.push(articleRow['Year']); // update the years to include the new year as well
-                  scoreboard[1] = true;
-                } 
+              if (descriptor !== undefined) {
+                const hash = crypto.createHash('sha256').update(descriptor).digest('hex');
+                /* === get the row from descriptors table for the passed value === */
+                let descriptorRow = await db.get(`SELECT DISTINCT * FROM descriptors WHERE hash = ?`, hash);
+                if (descriptorRow === undefined) {
+                  throw new Error(`Searching for the descriptor in the table, no row exists for ${descriptor} with calculated hash: ${hash}`);
+                } else {
+                  let scoreboard = [false, false, false]; // [0:yearsArr] [1:accrsArr] [2:both]
+  
+                  /* === Work with the existing Years array === */
+                  // Extract the year and compare with the values already existing
+                  let yearsArr = JSON.parse(descriptorRow['Years']); // parse JSON value        
+                  // first test if there is an array of years
+                  if (Array.isArray(yearsArr)) {
+                    // every article has one Year value; If you have an year in the article record and that very year is not in the array colected from the descriptor row
+                    if (articleRow['Year'] !== undefined && !yearsArr.includes(articleRow['Year'])) {
+                      let origYearsArr = yearsArr.length;                      
+                      yearsArr.push(articleRow['Year']); // update the years to include the new year as well
+                      let modYearsArr = yearsArr.length;
+                      if (modYearsArr > origYearsArr) {
+                        scoreboard[0] = true;
+                      };
+                    } 
+                  }
+          
+                  /* === Work with the existing JournalAccrs array === */
+                  let accrsArr = JSON.parse(descriptorRow['JournalAccrs']);  // transform the JSON text into an object
+                  // first test id there is an aray of values
+                  if (Array.isArray(accrsArr)) {
+                    if (descriptorRow['JournalAccrs'] !== undefined && !accrsArr.includes(articleRow['JournalAccr'])) {
+                      let origAccrsArr = accrsArr.length;
+                      accrsArr.push(articleRow['JournalAccr']);
+                      let modAccrArr = accrsArr.length;
+                      if (modAccrArr > origAccrsArr) {
+                        scoreboard[1] = true;
+                      }                  
+                    } // update de Accrs to include the new journal accr as well
+                  }
+    
+                  // // set the last value of the scoreboard
+                  if (scoreboard[0] === true && scoreboard[1] === true) {
+                    scoreboard[2] = true;
+                  }
+    
+                  if (scoreboard[0] === false && scoreboard[1] === false && scoreboard [2] === false) {
+                    continue;
+                  }
+    
+                  // prepare the new edge now that we have done enrichments
+                  let newEdge = [];
+                  newEdge[0] = descriptorRow['hash'];     // [Source:string]
+                  newEdge[1] = articleRow['Id'];          // [Target:string] this value is the id for the name of the article
+                  newEdge[2] = 1;                         // [Weight:integer]
+                  newEdge[3] = "Directed";                // [Type:string]
+                  newEdge[4] = "descriptor";              // [Kind:string]
+                  newEdge[5] = articleRow['Label'];       // [ArticleTitle:string]
+                  newEdge[6] = articleRow['Year'];        // [Year:integer]
+                  newEdge[7] = articleRow['JournalAccr']; // [JournalAccr:string]
+                  
+                  let now = new Date();
+                  /* === Enrichment stages according to missing or existing of years or Accrs === */
+                  // The case when the year and the JournalAccr are missing from their coresponding arrays of the descriptor
+                  if (scoreboard[2] === true) {                
+                    await addOneValueToAJSONarr('descriptors', 'Years',        '', JSON.stringify(yearsArr), 'hash', descriptorRow['hash']);
+                    await addOneValueToAJSONarr('descriptors', 'JournalAccrs', '', JSON.stringify(accrsArr), 'hash', descriptorRow['hash']);
+                    // create a new edge for this case when the descriptor shows up at another year, another journal/conference (venue)
+                    if (newEdge.length === 8) {
+                      await createAnEdge(newEdge);
+                    }                  
+                    let bothYearAndAccr = `Descriptor < ${descriptorRow['descriptor']} > has been updated on Years and Accrs.\n`;
+                    await fs.appendFile(`./logs/descriptorenrichment.log`, `[${now.toUTCString()}] : ${bothYearAndAccr}`, 'utf-8');                  
+                  }
+                   else if (scoreboard[0] === true && scoreboard[1] === false) {
+                    // treat the case when only the value or the `Year` is different
+                    await addOneValueToAJSONarr('descriptors', 'Years', '', JSON.stringify(yearsArr), 'hash', descriptorRow['hash']);
+                    // create a new edge for the case when a descriptor shows up in another year
+                    if (newEdge.length === 8) {
+                      await createAnEdge(newEdge);
+                    }
+                    let onlyYear = `Descriptor < ${descriptorRow['descriptor']} > has only an update on Year.\n`;
+                    await fs.appendFile(`./logs/descriptorenrichment.log`, `[${now.toUTCString()}] : ${onlyYear}`, 'utf-8');
+                  } else if (scoreboard[0] === false && scoreboard[1] === true) {
+                    // treat the case when the accronim of the venue doesn't exist
+                    await addOneValueToAJSONarr('descriptors', 'JournalAccrs', '', JSON.stringify(accrsArr), 'hash', descriptorRow['hash']);
+                    // treat the case when the descriptor shows up at the same year but to another article at another venue
+                    if (newEdge.length === 8) {
+                      await createAnEdge(newEdge);
+                    }
+                    let onlyAccrs = `Descriptor < ${descriptorRow['descriptor']} > has only an update on Accrs.\n`;
+                    await fs.appendFile(`./logs/descriptorenrichment.log`, `[${now.toUTCString()}] : ${onlyAccrs}`, 'utf-8');
+                  }
+                }                
+              } else {
+                throw new Error(`There is a problem with the descriptor at the loop of values in kwArr. I've got ${inspect(descriptor)}`);
               }
-      
-              /* === Work with the existing JournalAccrs array === */
-              let accrsArr = JSON.parse(descriptorRow['JournalAccrs']);  // transform the JSON text into an object
-              // first test id there is an aray of values
-              if (Array.isArray(accrsArr)) {
-                if (descriptorRow['JournalAccr'] !== undefined && !accrsArr.includes(articleRow['JournalAccr'])) {
-                  accrsArr.push(articleRow['JournalAccr']);
-                  scoreboard[1] = true;
-                } // update de Accrs to include the new journal accr as well
-              }
-
-              // set the last value of the scoreboard
-              if (scoreboard[0] && scoreboard[1]) {
-                scoreboard[2] = true;
-              }
-
-              if (scoreboard[0] === false && scoreboard[1] === false && scoreboard [2] === false) {
-                continue;
-              }
-
-              // prepare the new edge now that we have done enrichments
-              let newEdge = [];
-              newEdge[0] = descriptorRow['hash'];     // [Source:string]
-              newEdge[1] = articleRow['Id'];          // [Target:string] this value is the id for the name of the article
-              newEdge[2] = 1;                         // [Weight:integer]
-              newEdge[3] = "Directed";                // [Type:string]
-              newEdge[4] = "descriptor";              // [Kind:string]
-              newEdge[5] = articleRow['Label'];       // [ArticleTitle:string]
-              newEdge[6] = articleRow['Year'];        // [Year:integer]
-              newEdge[7] = articleRow['JournalAccr']; // [JournalAccr:string]
-              
-              let now = new Date();
-              /* === Enrichment stages according to missing or existing of years or Accrs === */
-              // The case when the year and the JournalAccr are missing from their coresponding arrays of the descriptor
-              if (scoreboard[2] === true) {
-                await addOneValueToAJSONarr('descriptors', 'Years',        '', JSON.stringify(yearsArr), 'hash', descriptorRow['hash']);
-                await addOneValueToAJSONarr('descriptors', 'JournalAccrs', '', JSON.stringify(accrsArr), 'hash', descriptorRow['hash']);
-                // create a new edge for this case when the descriptor shows up at another year, another journal/conference (venue)
-                if (newEdge.length === 8) {
-                  await createAnEdge(newEdge);
-                }                  
-                let bothYearAndAccr = `Descriptor <${descriptorRow.descriptor}> has been updated on Years and Accrs.\n`;
-                await fs.appendFile(`./logs/descriptorenrichment.log`, `[${now.toUTCString()}] : ${bothYearAndAccr}`, 'utf-8');                  
-              } else if (scoreboard[0] === true && scoreboard[1] === false) {
-                // treat the case when only the value or the `Year` is different
-                await addOneValueToAJSONarr('descriptors', 'Years', '', JSON.stringify(yearsArr), 'hash', descriptorRow['hash']);
-                // create a new edge for the case when a descriptor shows up in another year
-                if (newEdge.length === 8) {
-                  await createAnEdge(newEdge);
-                }
-                let onlyYear = `Descriptor <${descriptorRow.descriptor}> has only an update on Year.\n`;
-                await fs.appendFile(`./logs/descriptorenrichment.log`, `[${now.toUTCString()}] : ${onlyYear}`, 'utf-8');
-              } else if (scoreboard[0] === false && scoreboard[1] === true) {
-                // treat the case when the accronim of the venue doesn't exist
-                await addOneValueToAJSONarr('descriptors', 'JournalAccrs', '', JSON.stringify(accrsArr), 'hash', descriptorRow['hash']);
-                // treat the case when the descriptor shows up at the same year but to another article at another venue
-                if (newEdge.length === 8) {
-                  await createAnEdge(newEdge);
-                }
-                let onlyAccrs = `Descriptor <${descriptorRow.descriptor}> has only an update on Accrs.\n`;
-                await fs.appendFile(`./logs/descriptorenrichment.log`, `[${now.toUTCString()}] : ${onlyAccrs}`, 'utf-8');
-              }              
             }
           }
-          //       let now = new Date();
-          //       console.log(`In descriptor's table I don't have the one you search [${descriptor}].`);
-          //       fs.appendFile(`./logs/enrichmentIssues.log`, `[${now.toUTCString()}] : I don't have a record in descriptors. Value undefined\n`, 'utf-8');
-
         }
       } catch (error) {
-        throw new Error (error);
+        throw new Error (`enrichDescriptor: ${error}`);
       }
     }
-
-    logUpdate(`
-      The number of unique descrs ${noOfDescrProcessed}
-      The edge exists already. Counting already inserted ones: ${noEdgesSearch}     
-      The existing descriptors encountered: ${noDescrExisting} 
-    `);
-
-    // db.close(); // in the end close connection with the database
   } catch (error) {
-    consola.error(error);
+    console.log(error);
     let now = new Date();
     let logline = `[${now.toUTCString()}] «Error»: ${error.message}`;
     fs.appendFile(`./logs/error.log`, `${logline}\n`, 'utf8');
