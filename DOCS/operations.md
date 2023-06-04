@@ -134,4 +134,8 @@ Then, import the edges moving to *Edges* tab.
 
 Provided all went well, pressing the button *Overview* from top left, you arrive at the square of dread 🤣. Well done! You deserve a 🍸!
 
+For the rest, follow the steps given in the video Martin Granjean offers to you at https://www.youtube.com/watch?v=GXtbL8avpik.
+
+For those of you who would lite to go through the main concepts, there is a very good mini series (Introduction to Social Network Analysis) here offered by Martin Grandjean: https://www.youtube.com/watch?v=lnLW6ITFY3M&list=PL4iQXwvEG8CQSy4T1Z3cJZunvPtQp4dRy
+
 Have fun! Happy analysis.

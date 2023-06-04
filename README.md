@@ -28,4 +28,6 @@ Details for using the app, in this section of the documentation: [operations](DO
 
 This is version 1.0.0. If time allows it, it will be improved and maybe an interface. Now you have all you need to make a network of scientific papers. This application is as it is. I do not guarantee for the safety of your data. It is a well behaved application, but let's not sleep on that, shall we?!
 
+For creating the necessary data, I followed the guide presented by Clement Levallois here [5 methods to create and import networks in Gephi](https://www.youtube.com/watch?v=ltkzcSAStYo)
+
 (Teza UnitBv)
