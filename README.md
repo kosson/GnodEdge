@@ -23,7 +23,6 @@ Requirements:
 
 First things, first: read very, very, very carefully how to prepare the data opening [preparingdata](DOCS/preparingdata.md).
 
-Details for setting up the data and following the stages of refining it into nodes and edges, here: [loadingdata](DOCS/lodingdata.md).
 Details for using the app, in this section of the documentation: [operations](DOCS/operations.md).
 
 This is version 1.0.0. If time allows it, it will be improved and maybe an interface. Now you have all you need to make a network of scientific papers. This application is as it is. I do not guarantee for the safety of your data. It is a well behaved application, but let's not sleep on that, shall we?!
